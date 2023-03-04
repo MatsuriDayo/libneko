@@ -1,7 +1,6 @@
 package neko_common
 
 import (
-	"io"
 	"net/http"
 )
 
@@ -20,8 +19,6 @@ const (
 	RunMode_NekoBox_Core
 	RunMode_NekoBoxForAndroid
 )
-
-var NB4A_GuiLogWriter io.Writer
 
 // proxy
 

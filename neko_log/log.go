@@ -1,6 +1,7 @@
 package neko_log
 
 import (
+	"fmt"
 	"io"
 	"log"
 	"os"
@@ -9,8 +10,10 @@ import (
 )
 
 var LogWriter *logWriter
+var LogWriterDisable = false
+var NB4AGuiLogWriter io.Writer
 
-func SetupLog(maxSize int, path string) {
+func SetupLog(maxSize int, path string) (err error) {
 	if LogWriter != nil {
 		return
 	}
@@ -22,22 +25,24 @@ func SetupLog(maxSize int, path string) {
 		}
 	}
 	// open
-	f_neko_log, err := os.OpenFile(path, os.O_RDWR|os.O_APPEND|os.O_CREATE, 0644)
+	var f *os.File
+	f, err = os.OpenFile(path, os.O_RDWR|os.O_APPEND|os.O_CREATE, 0644)
 	if err == nil {
-		f_neko_log.Write(oldBytes)
+		_, _ = f.Write(oldBytes)
 	} else {
-		log.Println("error open log", err)
+		err = fmt.Errorf("error open log: %v", err)
 	}
 	//
 	LogWriter = &logWriter{}
 	if neko_common.RunMode == neko_common.RunMode_NekoBoxForAndroid {
-		LogWriter.writers = []io.Writer{neko_common.NB4A_GuiLogWriter, f_neko_log}
+		LogWriter.writers = []io.Writer{NB4AGuiLogWriter, f}
 	} else {
-		LogWriter.writers = []io.Writer{os.Stdout, f_neko_log}
+		LogWriter.writers = []io.Writer{os.Stdout, f}
 	}
 	// setup std log
 	log.SetFlags(log.LstdFlags | log.LUTC)
 	log.SetOutput(LogWriter)
+	return
 }
 
 type logWriter struct {
@@ -45,6 +50,10 @@ type logWriter struct {
 }
 
 func (w *logWriter) Write(p []byte) (n int, err error) {
+	if LogWriterDisable {
+		return len(p), nil
+	}
+
 	for _, w := range w.writers {
 		if w == nil {
 			continue
@@ -63,7 +72,7 @@ func (w *logWriter) Truncate() {
 			continue
 		}
 		if f, ok := w.(*os.File); ok {
-			f.Truncate(0)
+			_ = f.Truncate(0)
 		}
 	}
 }
@@ -74,7 +83,7 @@ func (w *logWriter) Close() error {
 			continue
 		}
 		if f, ok := w.(*os.File); ok {
-			f.Close()
+			_ = f.Close()
 		}
 	}
 	return nil
