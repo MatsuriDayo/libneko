@@ -3,8 +3,9 @@ package neko_log
 import (
 	"io"
 	"log"
-	"neko/neko_common"
 	"os"
+
+	"github.com/matsuridayo/libneko/neko_common"
 )
 
 var LogWriter *logWriter
