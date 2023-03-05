@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/matsuridayo/libneko/neko_common"
+	"github.com/matsuridayo/libneko/syscall"
 )
 
 var LogWriter *logWriter
@@ -52,7 +53,7 @@ type logWriter struct {
 	writers []io.Writer
 }
 
-func (w *logWriter) Write(p []byte) (n int, err error) {
+func (w *logWriter) Write(p []byte) (int, error) {
 	if LogWriterDisable {
 		return len(p), nil
 	}
@@ -61,12 +62,15 @@ func (w *logWriter) Write(p []byte) (n int, err error) {
 		if w == nil {
 			continue
 		}
-		n, err = w.Write(p)
-		if err != nil {
-			return
+		if f, ok := w.(*os.File); ok {
+			fd := int(f.Fd())
+			syscall.Flock(fd, syscall.LOCK_EX)
+			defer syscall.Flock(fd, syscall.LOCK_UN)
 		}
+		w.Write(p)
 	}
-	return
+
+	return len(p), nil
 }
 
 func (w *logWriter) Truncate() {
