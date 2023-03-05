@@ -19,7 +19,8 @@ func SetupLog(maxSize int, path string) (err error) {
 	}
 	// Truncate mod from libcore, simplify because only 1 proccess.
 	oldBytes, err := os.ReadFile(path)
-	if err == nil && len(oldBytes) > maxSize {
+	needTruncate := len(oldBytes) > maxSize
+	if err == nil && needTruncate {
 		if os.Truncate(path, 0) == nil {
 			oldBytes = oldBytes[len(oldBytes)-maxSize:]
 		}
@@ -28,7 +29,9 @@ func SetupLog(maxSize int, path string) (err error) {
 	var f *os.File
 	f, err = os.OpenFile(path, os.O_RDWR|os.O_APPEND|os.O_CREATE, 0644)
 	if err == nil {
-		_, _ = f.Write(oldBytes)
+		if needTruncate {
+			_, _ = f.Write(oldBytes)
+		}
 	} else {
 		err = fmt.Errorf("error open log: %v", err)
 	}
