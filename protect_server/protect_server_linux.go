@@ -2,10 +2,10 @@ package protect_server
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"os"
-	"os/signal"
 	"reflect"
 	"syscall"
 )
@@ -20,14 +20,14 @@ func getOneFd(socket int) (int, error) {
 
 	// parse control msgs
 	var msgs []syscall.SocketControlMessage
-	msgs, err = syscall.ParseSocketControlMessage(buf)
+	msgs, _ = syscall.ParseSocketControlMessage(buf)
 
 	if len(msgs) != 1 {
 		return 0, fmt.Errorf("invaild msgs count: %d", len(msgs))
 	}
 
 	var fds []int
-	fds, err = syscall.ParseUnixRights(&msgs[0])
+	fds, _ = syscall.ParseUnixRights(&msgs[0])
 	if len(fds) != 1 {
 		return 0, fmt.Errorf("invaild fds count: %d", len(fds))
 	}
@@ -43,25 +43,25 @@ func GetFdFromConn(l net.Conn) int {
 	return fd
 }
 
-func ServeProtect(path string, fwmark int) {
-	fmt.Println("ServeProtect", path, fwmark)
+func ServeProtect(path string, verbose bool, fwmark int, protectCtl func(fd int)) io.Closer {
+	if verbose {
+		log.Println("ServeProtect", path, fwmark)
+	}
 
 	os.Remove(path)
-	defer os.Remove(path)
-
 	l, err := net.ListenUnix("unix", &net.UnixAddr{Name: path, Net: "unix"})
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer l.Close()
-
 	os.Chmod(path, 0777)
 
-	go func() {
+	go func(ctl func(fd int)) {
 		for {
 			c, err := l.Accept()
 			if err != nil {
-				log.Println("Accept:", err)
+				if verbose {
+					log.Println("protect server accept:", err)
+				}
 				return
 			}
 
@@ -71,13 +71,21 @@ func ServeProtect(path string, fwmark int) {
 
 				fd, err := getOneFd(socket)
 				if err != nil {
-					log.Println("getOneFd:", err)
+					if verbose {
+						log.Println("protect server getOneFd:", err)
+					}
 					return
 				}
 				defer syscall.Close(fd)
 
-				if err := syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_MARK, fwmark); err != nil {
-					log.Println("syscall.SetsockoptInt:", err)
+				if ctl == nil {
+					// linux
+					if err := syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_MARK, fwmark); err != nil {
+						log.Println("protect server syscall.SetsockoptInt:", err)
+					}
+				} else {
+					// android
+					ctl(fd)
 				}
 
 				if err == nil {
@@ -87,9 +95,7 @@ func ServeProtect(path string, fwmark int) {
 				}
 			}()
 		}
-	}()
+	}(protectCtl)
 
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-	<-sigCh
+	return l
 }
