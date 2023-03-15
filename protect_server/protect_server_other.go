@@ -2,4 +2,8 @@
 
 package protect_server
 
-func ServeProtect(path string, fwmark int) {}
+import "io"
+
+func ServeProtect(path string, verbose bool, fwmark int, protectCtl func(fd int)) io.Closer {
+	return nil
+}
