@@ -5,6 +5,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"runtime"
 
 	"github.com/matsuridayo/libneko/neko_common"
 	"github.com/matsuridayo/libneko/syscall"
@@ -12,30 +13,50 @@ import (
 
 var LogWriter *logWriter
 var LogWriterDisable = false
+var TruncateOnStart = true
 var NB4AGuiLogWriter io.Writer
 
 func SetupLog(maxSize int, path string) (err error) {
 	if LogWriter != nil {
 		return
 	}
-	// Truncate mod from libcore, simplify because only 1 proccess.
-	oldBytes, err := os.ReadFile(path)
-	needTruncate := len(oldBytes) > maxSize
-	if err == nil && needTruncate {
-		if os.Truncate(path, 0) == nil {
-			oldBytes = oldBytes[len(oldBytes)-maxSize:]
-		}
-	}
-	// open
+
 	var f *os.File
 	f, err = os.OpenFile(path, os.O_RDWR|os.O_APPEND|os.O_CREATE, 0644)
 	if err == nil {
-		if needTruncate {
-			_, _ = f.Write(oldBytes)
+		if TruncateOnStart {
+			fd := int(f.Fd())
+			syscall.Flock(fd, syscall.LOCK_EX)
+			// Check if need truncate
+			if size, _ := f.Seek(0, io.SeekEnd); size > int64(maxSize) {
+				// read oldBytes for maxSize
+				f.Seek(-int64(maxSize), io.SeekCurrent)
+				oldBytes, err := io.ReadAll(f)
+				if err == nil {
+					// truncate file
+					if runtime.GOOS == "windows" {
+						f.Close()
+						os.Remove(path)
+						// reopen file
+						f, err = os.OpenFile(path, os.O_RDWR|os.O_APPEND|os.O_CREATE, 0644)
+					} else {
+						err = f.Truncate(0)
+					}
+					// write oldBytes
+					if err == nil {
+						f.Write(oldBytes)
+					}
+				}
+			}
+			syscall.Flock(fd, syscall.LOCK_UN)
 		}
-	} else {
-		err = fmt.Errorf("error open log: %v", err)
 	}
+
+	if err != nil {
+		err = fmt.Errorf("error open log: %v", err)
+		log.Println(err)
+	}
+
 	//
 	LogWriter = &logWriter{}
 	if neko_common.RunMode == neko_common.RunMode_NekoBoxForAndroid {
@@ -46,6 +67,7 @@ func SetupLog(maxSize int, path string) (err error) {
 	// setup std log
 	log.SetFlags(log.LstdFlags | log.LUTC)
 	log.SetOutput(LogWriter)
+
 	return
 }
 
