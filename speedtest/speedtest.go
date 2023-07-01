@@ -3,7 +3,6 @@ package speedtest
 import (
 	"context"
 	"fmt"
-	"math/rand"
 	"net"
 	"net/http"
 	"strings"
@@ -14,6 +13,7 @@ func UrlTest(client *http.Client, link string, timeout int32) (int32, error) {
 	if client == nil {
 		return 0, fmt.Errorf("no client")
 	}
+	defer client.CloseIdleConnections()
 
 	// Test handshake time
 	var time_start time.Time
@@ -31,7 +31,6 @@ func UrlTest(client *http.Client, link string, timeout int32) (int32, error) {
 	defer cancel()
 
 	req, err := http.NewRequestWithContext(ctx, "GET", link, nil)
-	req.Header.Set("User-Agent", fmt.Sprintf("curl/7.%d.%d", rand.Int()%84, rand.Int()%2))
 	if err != nil {
 		return 0, err
 	}
