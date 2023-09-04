@@ -1,4 +1,4 @@
-package syscall
+package syscallw
 
 const (
 	LOCK_EX = 0x2

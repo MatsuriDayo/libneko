@@ -1,6 +1,6 @@
 //go:build !windows
 
-package syscall
+package syscallw
 
 import "syscall"
 

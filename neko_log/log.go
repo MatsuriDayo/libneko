@@ -6,9 +6,10 @@ import (
 	"log"
 	"os"
 	"runtime"
+	"syscall"
 
 	"github.com/matsuridayo/libneko/neko_common"
-	"github.com/matsuridayo/libneko/syscall"
+	"github.com/matsuridayo/libneko/syscallw"
 )
 
 var LogWriter *logWriter
@@ -24,9 +25,9 @@ func SetupLog(maxSize int, path string) (err error) {
 	var f *os.File
 	f, err = os.OpenFile(path, os.O_RDWR|os.O_APPEND|os.O_CREATE, 0644)
 	if err == nil {
+		fd := int(f.Fd())
 		if TruncateOnStart {
-			fd := int(f.Fd())
-			syscall.Flock(fd, syscall.LOCK_EX)
+			syscallw.Flock(fd, syscallw.LOCK_EX)
 			// Check if need truncate
 			if size, _ := f.Seek(0, io.SeekEnd); size > int64(maxSize) {
 				// read oldBytes for maxSize
@@ -48,7 +49,11 @@ func SetupLog(maxSize int, path string) (err error) {
 					}
 				}
 			}
-			syscall.Flock(fd, syscall.LOCK_UN)
+			syscallw.Flock(fd, syscallw.LOCK_UN)
+		}
+		if neko_common.RunMode == neko_common.RunMode_NekoBoxForAndroid {
+			// redirect stderr
+			syscall.Dup3(fd, int(os.Stderr.Fd()), 0)
 		}
 	}
 
@@ -86,10 +91,12 @@ func (w *logWriter) Write(p []byte) (int, error) {
 		}
 		if f, ok := w.(*os.File); ok {
 			fd := int(f.Fd())
-			syscall.Flock(fd, syscall.LOCK_EX)
-			defer syscall.Flock(fd, syscall.LOCK_UN)
+			syscallw.Flock(fd, syscallw.LOCK_EX)
+			f.Write(p)
+			syscallw.Flock(fd, syscallw.LOCK_UN)
+		} else {
+			w.Write(p)
 		}
-		w.Write(p)
 	}
 
 	return len(p), nil
