@@ -6,7 +6,6 @@ import (
 	"log"
 	"os"
 	"runtime"
-	"syscall"
 
 	"github.com/matsuridayo/libneko/neko_common"
 	"github.com/matsuridayo/libneko/syscallw"
@@ -53,7 +52,7 @@ func SetupLog(maxSize int, path string) (err error) {
 		}
 		if neko_common.RunMode == neko_common.RunMode_NekoBoxForAndroid {
 			// redirect stderr
-			syscall.Dup3(fd, int(os.Stderr.Fd()), 0)
+			syscallw.Dup3(fd, int(os.Stderr.Fd()), 0)
 		}
 	}
 
