@@ -1,5 +1,3 @@
-//go:build !windows && !darwin
-
 package syscallw
 
 import "syscall"
@@ -9,5 +7,5 @@ func Flock(fd int, how int) (err error) {
 }
 
 func Dup3(oldfd int, newfd int, flags int) (err error) {
-	return syscall.Dup3(oldfd, newfd, flags)
+	return syscall.Dup2(oldfd, newfd)
 }
